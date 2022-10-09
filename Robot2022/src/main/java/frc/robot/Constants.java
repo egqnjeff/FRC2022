@@ -13,7 +13,11 @@ package frc.robot;
  * constants are needed, to reduce verbosity.
  */
 public final class Constants {
-    
+   
+    public static class ConSparkMax {
+        public static double POSITION_CONVERSION_FACTOR = 42.0;
+    }
+ 
 }
 
 /** Original CPP

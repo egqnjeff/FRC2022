@@ -4,16 +4,174 @@
 
 package frc.robot.subsystems;
 
-import edu.wpi.first.wpilibj2.command.SubsystemBase;
+import com.revrobotics.CANSparkMax;
+import com.revrobotics.RelativeEncoder;
 
-public class Climber extends SubsystemBase {
-  /** Creates a new Climber. */
-  public Climber() {}
+import edu.wpi.first.math.controller.PIDController;
+import edu.wpi.first.networktables.NetworkTableEntry;
+import edu.wpi.first.wpilibj.shuffleboard.BuiltInWidgets;
+import edu.wpi.first.wpilibj.shuffleboard.Shuffleboard;
+import edu.wpi.first.wpilibj.shuffleboard.ShuffleboardTab;
+import edu.wpi.first.wpilibj2.command.PIDSubsystem;
+import frc.robot.Constants.ConSparkMax;
+import frc.robot.OI.ConShuffleboard;
 
-  @Override
-  public void periodic() {
-    // This method will be called once per scheduler run
+public class Climber extends PIDSubsystem {
+  
+  public static class ConClimber {
+    // Motor
+    public static int CLIMBER_MOTOR_ID = 8;
+  
+    //Spark Max Settings
+    public static double RAMP_RATE = 0.100; //seconds
+    public static boolean INVERTED = true; //
+    public static boolean NONINVERTED = false; //
+    public static double CLIMB_SPEED = -1.0;  // Climb Motor Speed
+    public static double DESCEND_SPEED = 1.0; // Descend Motor Speed
+    public static int SOFT_LIMIT_FWD = 4784; // Soft Limit Extension 5' 6" MAX height; Bar @ 60-1/4"
+    public static int SOFT_LIMIT_REV = 200;
+    public static int CURRENT_STALL_LIMIT = 80;
+  
+    //Servo
+    public static int kServoPWMPort = 9;
   }
+  
+  ShuffleboardTab m_sbt_Climber;
+  NetworkTableEntry m_nte_ClimberDistance;
+  NetworkTableEntry m_nte_ClimberOutput;
+  NetworkTableEntry m_nte_ClimbSpeedLimit;
+  NetworkTableEntry m_nte_DescendSpeedLimit;
+  NetworkTableEntry m_nte_ExtendLimit;
+  NetworkTableEntry m_nte_RetractLimit;
+  NetworkTableEntry m_nte_MotorCurrent;
+  double m_softLimitFwd = ConClimber.SOFT_LIMIT_FWD;
+  double m_softLimitRev = ConClimber.SOFT_LIMIT_REV;
+  
+  // #ifdef ENABLE_CLIMBER
+    // Neo motor controllers
+    CANSparkMax m_climberMotor = new CANSparkMax(ConClimber.CLIMBER_MOTOR_ID, CANSparkMax.MotorType.kBrushless);
+    // Drive encoders
+    RelativeEncoder m_climberEncoder = m_climberMotor.getEncoder();
+  // #endif // ENABLE_CLIMBER
+  
+  public Climber()  {
+    // The PIDController used by the subsystem
+    super(new PIDController(0, 0, 0));
+
+    // Initialize Shuffleboard Tab and Network Table Entries
+    m_sbt_Climber = Shuffleboard.getTab(ConShuffleboard.ClimberTab);
+
+    m_nte_ClimberDistance = m_sbt_Climber.addPersistent("Climber Position", 0.0)
+          .withSize(2,1)
+          .withPosition(0,0)
+          .getEntry();
+    m_nte_ClimberOutput = m_sbt_Climber.addPersistent("Climber Output", 0.0)
+          .withSize(2,2)
+          .withPosition(0,1)
+          .withWidget(BuiltInWidgets.kDial)
+          .getEntry();
+    m_nte_MotorCurrent = m_sbt_Climber.addPersistent("Motor Current", 0.0)
+          .withSize(2,2)
+          .withPosition(0,2)
+          .withWidget(BuiltInWidgets.kDial)
+          .getEntry();
+    m_nte_ClimbSpeedLimit = m_sbt_Climber.addPersistent("Climb Speed Limit", ConClimber.CLIMB_SPEED)
+          .withSize(2,1)
+          .withPosition(2,0)
+          .getEntry();
+    m_nte_DescendSpeedLimit = m_sbt_Climber.addPersistent("Descend Speed Limit", ConClimber.DESCEND_SPEED)
+          .withSize(2,1)
+          .withPosition(2,1)
+          .getEntry();
+    m_nte_ExtendLimit = m_sbt_Climber.addPersistent("Extension Limit", ConClimber.SOFT_LIMIT_FWD)
+          .withSize(2,1)
+          .withPosition(2,2)
+          .getEntry();
+    m_nte_RetractLimit = m_sbt_Climber.addPersistent("Retract Limit", ConClimber.SOFT_LIMIT_REV)
+          .withSize(2,1)
+          .withPosition(2,3)
+          .getEntry();
+
+  // #ifdef ENABLE_CLIMBER
+    m_climberMotor.setSmartCurrentLimit(ConClimber.CURRENT_STALL_LIMIT, ConClimber.CURRENT_STALL_LIMIT);
+    m_climberEncoder.setPositionConversionFactor(ConSparkMax.POSITION_CONVERSION_FACTOR); // Generally 42
+    m_climberMotor.setIdleMode(CANSparkMax.IdleMode.kBrake);
+    // Reset Encoder to zero for starting configuration
+    m_climberEncoder.setPosition(0.0);
+    // Configure SparkMax SoftLimits
+    m_climberMotor.enableSoftLimit(CANSparkMax.SoftLimitDirection.kForward, true);
+    m_climberMotor.setSoftLimit(CANSparkMax.SoftLimitDirection.kForward, ConClimber.SOFT_LIMIT_FWD);
+    m_climberMotor.enableSoftLimit(CANSparkMax.SoftLimitDirection.kReverse, true);
+    m_climberMotor.setSoftLimit(CANSparkMax.SoftLimitDirection.kReverse, ConClimber.SOFT_LIMIT_REV);
+  // #endif 
+  }
+
+public void useOutput(double output, double setpoint) {
+  // Use the output here
+}
+
+public double getMeasurement() {
+  // Return the process variable measurement here
+  return 0;
+}
+
+// Climb lifts the robot up to target position
+public void climb() {
+  // #ifdef ENABLE_CLIMBER
+    m_climberMotor.set(m_nte_ClimbSpeedLimit.getDouble(ConClimber.CLIMB_SPEED));
+  // #endif
+}
+
+// Descend is a manual override to lower the robot
+public void extend() {
+  // #ifdef ENABLE_CLIMBER
+    m_climberMotor.set(m_nte_DescendSpeedLimit.getDouble(ConClimber.DESCEND_SPEED));
+  // #endif
+}
+
+public void stop() {
+  // #ifdef ENABLE_CLIMBER
+    m_climberMotor.set(0.0);
+  // #endif
+}
+
+public void periodic() {
+  // #ifdef ENABLE_CLIMBER
+    m_nte_ClimberDistance.setDouble(m_climberEncoder.getPosition());
+    m_nte_ClimberOutput.setDouble(m_climberEncoder.getVelocity());
+    m_nte_MotorCurrent.setDouble(m_climberMotor.getOutputCurrent());
+  // #endif
+}
+
+public void setClimberSoftLimits() {
+  double d;
+  d = m_nte_ExtendLimit.getDouble(ConClimber.SOFT_LIMIT_FWD);
+  if (d != m_softLimitFwd) {
+    System.out.println("Changing Forward limit from " + m_softLimitFwd + " to " + d);
+    m_softLimitFwd = d;
+  // #ifdef ENABLE_CLIMBER
+    m_climberMotor.enableSoftLimit(CANSparkMax.SoftLimitDirection.kForward, true);
+    m_climberMotor.setSoftLimit(CANSparkMax.SoftLimitDirection.kForward, (float) m_softLimitFwd);
+  // #endif // ENABLE_CLIMBER
+  }
+  d = m_nte_RetractLimit.getDouble(ConClimber.SOFT_LIMIT_REV);
+  if (d != m_softLimitRev) {
+    System.out.println("Changing Reverse limit from " + m_softLimitRev + " to " + d);
+    m_softLimitRev = d;
+  // #ifdef ENABLE_CLIMBER
+    m_climberMotor.enableSoftLimit(CANSparkMax.SoftLimitDirection.kReverse, true);
+    m_climberMotor.setSoftLimit(CANSparkMax.SoftLimitDirection.kReverse, (float) m_softLimitRev);
+  // #endif // ENABLE_CLIMBER
+  }
+}
+
+public void burnFlash() {
+  System.out.println("BurnFlash for Climber");
+  // #ifdef ENABLE_CLIMBER
+    m_climberMotor.burnFlash();
+  // #endif // ENABLE_CLIMBER
+}
+
 }
 
 /** Original H

@@ -19,16 +19,18 @@ import frc.robot.OI;
 
 public class Intake extends SubsystemBase {
 
-  private static int MOTOR_ID = 9;
-  private static int PNEUM_PORT_A = 0;
-  private static int PNEUM_PORT_B = 1;
-  private static double LOAD_BALL = -.9; // Should be motor forward
-  private static double REJECT_BALL = .9; // Should be motor reverse
-  private static int CURRENT_STALL_LIMIT = 40;
-  private static double INTAKE_POWER = .55; // Up from 60% power
-  private static DoubleSolenoid.Value DEPLOY_INTAKE = DoubleSolenoid.Value.kReverse;
-  private static DoubleSolenoid.Value STOW_INTAKE = DoubleSolenoid.Value.kForward;
-  private static double SHUTDOWN_DELAY = 1.0; // Seconds to delay between Stow() and motor shutdown  /** Creates a new Intake. */
+  public static class ConIntake {
+    public static int MOTOR_ID = 9;
+    public static int PNEUM_PORT_A = 0;
+    public static int PNEUM_PORT_B = 1;
+    public static double LOAD_BALL = -.9; // Should be motor forward
+    public static double REJECT_BALL = .9; // Should be motor reverse
+    public static int CURRENT_STALL_LIMIT = 40;
+    public static double INTAKE_POWER = .55; // Up from 60% power
+    public static DoubleSolenoid.Value DEPLOY_INTAKE = DoubleSolenoid.Value.kReverse;
+    public static DoubleSolenoid.Value STOW_INTAKE = DoubleSolenoid.Value.kForward;
+    public static double SHUTDOWN_DELAY = 1.0; // Seconds to delay between Stow() and motor shutdown  /** Creates a new Intake. */
+    }
   
   ShuffleboardTab m_sbt_Intake;
   NetworkTableEntry m_nte_MotorCurrent;
@@ -37,8 +39,8 @@ public class Intake extends SubsystemBase {
   NetworkTableEntry m_nte_ShutdownDelay;
 
   //#ifdef ENABLE_INTAKE
-  DoubleSolenoid deployDoublePCM = new DoubleSolenoid(PneumaticsModuleType.CTREPCM, PNEUM_PORT_A, PNEUM_PORT_B);
-  CANSparkMax m_intakeMotor = new CANSparkMax(MOTOR_ID, CANSparkMax.MotorType.kBrushless); // New Neo motor
+  DoubleSolenoid deployDoublePCM = new DoubleSolenoid(PneumaticsModuleType.CTREPCM, ConIntake.PNEUM_PORT_A, ConIntake.PNEUM_PORT_B);
+  CANSparkMax m_intakeMotor = new CANSparkMax(ConIntake.MOTOR_ID, CANSparkMax.MotorType.kBrushless); // New Neo motor
   RelativeEncoder m_intakeEncoder = m_intakeMotor.getEncoder();
   //#endif // ENABLE_INTAKE
 
@@ -52,18 +54,18 @@ public class Intake extends SubsystemBase {
       deployDoublePCM.set(DoubleSolenoid.Value.kReverse);
       m_deployedState = false;
 
-      m_intakeMotor.setSmartCurrentLimit(CURRENT_STALL_LIMIT, CURRENT_STALL_LIMIT);
+      m_intakeMotor.setSmartCurrentLimit(ConIntake.CURRENT_STALL_LIMIT, ConIntake.CURRENT_STALL_LIMIT);
       m_intakeMotor.setIdleMode(CANSparkMax.IdleMode.kCoast);
       m_intakeMotor.setOpenLoopRampRate(0.1);
 
       // Initialize Shuffleboard Tab and Network Table Entries
       m_sbt_Intake = Shuffleboard.getTab(OI.ConShuffleboard.IntakeTab);
 
-      m_nte_MotorPower = m_sbt_Intake.addPersistent("Motor Power", INTAKE_POWER)
+      m_nte_MotorPower = m_sbt_Intake.addPersistent("Motor Power", ConIntake.INTAKE_POWER)
             .withSize(2,1)
             .withPosition(0,0)
             .getEntry();
-      m_nte_ShutdownDelay = m_sbt_Intake.addPersistent("Shutdown Delay", SHUTDOWN_DELAY)
+      m_nte_ShutdownDelay = m_sbt_Intake.addPersistent("Shutdown Delay", ConIntake.SHUTDOWN_DELAY)
             .withSize(2,1)
             .withPosition(0,1)
             .getEntry();
@@ -95,7 +97,7 @@ public class Intake extends SubsystemBase {
   public void deploy() {
     System.out.println("Intake::Deploy() Executing...");
     //#ifdef ENABLE_INTAKE
-      deployDoublePCM.set(DEPLOY_INTAKE);
+      deployDoublePCM.set(ConIntake.DEPLOY_INTAKE);
     //#endif // ENABLE_INTAKE
       m_deployedState = true;
       load();
@@ -107,7 +109,7 @@ public class Intake extends SubsystemBase {
     System.out.println("Intake::Stow() Executing...");
   
     //#ifdef ENABLE_INTAKE
-      deployDoublePCM.set(STOW_INTAKE);
+      deployDoublePCM.set(ConIntake.STOW_INTAKE);
       m_timer.reset();
       m_timer.start();
     //#endif // ENABLE_INTAKE
@@ -120,7 +122,7 @@ public class Intake extends SubsystemBase {
     System.out.println("Intake::Load() Executing...");
     //#ifdef ENABLE_INTAKE
       if (m_deployedState) {
-        m_intakeMotor.set(LOAD_BALL * m_intakePower);
+        m_intakeMotor.set(ConIntake.LOAD_BALL * m_intakePower);
       } else {
         m_intakeMotor.set(0.0);
       }
@@ -131,7 +133,7 @@ public class Intake extends SubsystemBase {
     System.out.println("Intake::Reject() Executing...");
     // #ifdef ENABLE_INTAKE
       if (m_deployedState) {
-        m_intakeMotor.set(REJECT_BALL * m_intakePower);
+        m_intakeMotor.set(ConIntake.REJECT_BALL * m_intakePower);
       } else {
         m_intakeMotor.set(0.0);
       }  
@@ -144,8 +146,8 @@ public class Intake extends SubsystemBase {
     // #ifdef ENABLE_INTAKE
     m_nte_MotorCurrent.setDouble(m_intakeMotor.getOutputCurrent());
     m_nte_StowedState.setBoolean(!m_deployedState);
-    m_intakePower = m_nte_MotorPower.getDouble(INTAKE_POWER);
-    if (m_deployedState == false && m_timer.get() > SHUTDOWN_DELAY) {
+    m_intakePower = m_nte_MotorPower.getDouble(ConIntake.INTAKE_POWER);
+    if (m_deployedState == false && m_timer.get() > ConIntake.SHUTDOWN_DELAY) {
       m_intakeMotor.set(0.0);
     }
     // #endif // ENABLE_INTAKE 
