@@ -4,16 +4,391 @@
 
 package frc.robot.subsystems;
 
+import com.kauailabs.navx.frc.AHRS;
+import com.revrobotics.CANSparkMax;
+import com.revrobotics.RelativeEncoder;
+import com.revrobotics.SparkMaxPIDController;
+import edu.wpi.first.wpilibj.SPI;
+import edu.wpi.first.networktables.NetworkTableEntry;
+import edu.wpi.first.wpilibj.drive.DifferentialDrive;
+import edu.wpi.first.wpilibj.shuffleboard.Shuffleboard;
+import edu.wpi.first.wpilibj.shuffleboard.ShuffleboardTab;
 import edu.wpi.first.wpilibj2.command.SubsystemBase;
+import frc.robot.OI;
+import frc.robot.Constants.ConMath;
+import frc.robot.Constants.ConSparkMax;
+import frc.robot.OI.ConShuffleboard;
 
 public class DriveTrain extends SubsystemBase {
-  /** Creates a new DriveTrain. */
-  public DriveTrain() {}
 
-  @Override
-  public void periodic() {
-    // This method will be called once per scheduler run
+  public static class ConDriveTrain {
+    // Autonomous Constants
+    public static double AUTONOMOUS_DISTANCE = 84;  // 84.75 inches Needed to exit the launchpad 
+    public static double AUTONOMOUS_DRIVE_DELAY = 5.0; // Seconds to delay between launch & drive
+    public static int AUTONOMOUS_MODE_2_BALL = 1;
+    public static int AUTONOMOUS_MODE_LAUNCH_DELAY_MOVE = 2;
+    public static int AUTONOMOUS_MODE_JUST_MOVE = 3;
+    public static int AUTONOMOUS_MODE_5_BALL = 5;
+
+    // Motors
+    public static int RIGHT_MOTOR_A_ID = 2;
+    public static int RIGHT_MOTOR_B_ID = 4;
+    public static int LEFT_MOTOR_A_ID = 3;
+    public static int LEFT_MOTOR_B_ID = 5;
+    //constexpr double ROTATION_FACTOR = 1/1.3;
+
+    //Spark Max Settings
+    public static double RAMP_RATE = 0.100; //seconds
+    public static boolean INVERTED = true; //
+    public static boolean NONINVERTED = false; //
+    
+    // Neo Motor & Gearbox
+    public static double ENCODER_TICK_RESOLUTION = 42.0; // IS IT REALLY 42? or 48? or maybe 24?  
+    public static double GEAR_RATIO = 10.71; // Neo rotates 10.71 times for one rotation of the output
+    public static double WHEEL_DIAMETER = 6.0;
+    public static double WHEEL_CIRCUMFERENCE = WHEEL_DIAMETER * ConMath.PI; // Abt 18.85 in.
+
+    public static double TICKS_PER_WHEEL_REVOLUTION = ENCODER_TICK_RESOLUTION * GEAR_RATIO; // Abt 450 ticks
+
+    //Conversions
+    public static double TICKS_PER_INCH = TICKS_PER_WHEEL_REVOLUTION / (double)WHEEL_CIRCUMFERENCE; // Abt 24 ticks per inch
+    public static double INCHES_PER_TICK = (double)WHEEL_CIRCUMFERENCE / TICKS_PER_WHEEL_REVOLUTION; // Abt 1/24 (.042)
+
+    // degrees to in
+    public static double ANGLE_2_IN = 25.5 * ConMath.PI/360; // FIXME: What is this fudge factor? 25.5?
+    public static double IN_2_ANGLE= 1/ANGLE_2_IN;
+
+    // Experimental Drive Characterization/SysID for Trajectory Following
+    // These are example values only - DO NOT USE THESE FOR YOUR OWN ROBOT!
+    // These characterization values MUST be determined either experimentally or
+    // theoretically for *your* robot's drive. The Robot Characterization
+    // Toolsuite provides a convenient tool for obtaining these values for your
+    // robot.
+    //constexpr auto ks = 0.14251_V;
+    //constexpr auto kv = 1.98 * 1_V * 1_s / 1_in;
+    //constexpr auto ka = 0.2 * 1_V * 1_s * 1_s / 1_in;
+
+    // Example value only - as above, this must be tuned for your drive!
+    public static double kPDriveVel = 0.14047;
+
+    //constexpr auto kTrackwidth = 22.8125_in;
+    //extern const frc::DifferentialDriveKinematics kDriveKinematics;
+    //constexpr auto kMaxSpeed = 3_mps;
+    //constexpr auto kMaxAcceleration = 3_mps_sq;
+
+    // Reasonable baseline values for a RAMSETE follower in units of meters and
+    // seconds
+    public static double kRamseteB = 39.3701 * 2.0; // Inches. Was: 2;
+    public static double kRamseteZeta = 0.7;
   }
+
+  ShuffleboardTab m_sbt_DriveTrain;
+  NetworkTableEntry m_nte_DriveSpeedFilter;
+  NetworkTableEntry m_nte_DriveRotationFilter;
+  NetworkTableEntry m_nte_InputExponent;
+
+  // Encoder outputs
+  NetworkTableEntry m_nte_LeftEncoder;
+  NetworkTableEntry m_nte_RightEncoder;
+  NetworkTableEntry m_nte_IMU_ZAngle;
+
+  NetworkTableEntry m_nte_Testing;
+
+  // Autonomous Variables
+  NetworkTableEntry m_nte_a_DriveDelay;
+  NetworkTableEntry m_nte_b_DriveDistance;
+  NetworkTableEntry m_nte_c_DriveTurnAngle;
+  NetworkTableEntry m_nte_autoDriveMode;
+    
+  // Autonomous drive parameters
+  double m_autoDistance = ConDriveTrain.AUTONOMOUS_DISTANCE;
+  double m_autoDriveMode = ConDriveTrain.AUTONOMOUS_MODE_2_BALL;
+  double m_autoDriveDelay = ConDriveTrain.AUTONOMOUS_DRIVE_DELAY;
+
+  double m_maxOutput = 1.0;
+
+  // #ifdef ENABLE_DRIVETRAIN
+  AHRS gyro;
+
+  // Neo motor controllers
+  CANSparkMax m_rightMotorA = new CANSparkMax(ConDriveTrain.RIGHT_MOTOR_A_ID, CANSparkMax.MotorType.kBrushless);
+  CANSparkMax m_rightMotorB = new CANSparkMax(ConDriveTrain.RIGHT_MOTOR_B_ID, CANSparkMax.MotorType.kBrushless);
+  CANSparkMax m_leftMotorA = new CANSparkMax(ConDriveTrain.LEFT_MOTOR_A_ID, CANSparkMax.MotorType.kBrushless);
+  CANSparkMax m_leftMotorB = new CANSparkMax(ConDriveTrain.LEFT_MOTOR_B_ID, CANSparkMax.MotorType.kBrushless);
+
+  // Drive Train Smart Motion PID set-up below 
+  SparkMaxPIDController left_pidController = m_leftMotorA.getPIDController();
+  SparkMaxPIDController right_pidController = m_rightMotorA.getPIDController();
+
+  // default PID coefficients
+  double kP = 5e-5, kI = 1e-6, kD = 0, kIz = 0, kFF = 0.000156, kMaxOutput = 1, kMinOutput = -1;
+
+  // default smart motion coefficients
+  double kMaxVel = 2000, kMinVel = 0, kMaxAcc = 1500, kAllErr = 0;
+
+  // motor max RPM
+  final double MaxRPM = 5700;
+
+  // Drive encoders
+  RelativeEncoder m_rightEncoderA = m_rightMotorA.getEncoder();
+  RelativeEncoder m_rightEncoderB = m_rightMotorB.getEncoder();
+  RelativeEncoder m_leftEncoderA = m_leftMotorA.getEncoder();
+  RelativeEncoder m_leftEncoderB = m_leftMotorB.getEncoder();
+
+  // Robot Drive
+  DifferentialDrive m_driveTrain = new DifferentialDrive(m_leftMotorA, m_rightMotorA);
+  //#endif // ENABLE_DRIVETRAIN
+
+  public DriveTrain() {
+    //#ifdef ENABLE_DRIVETRAIN
+    // Settings for Spark Max motor controllers should be done here, in code
+    // and not in the Spark Max Client Software
+    m_rightMotorA.setOpenLoopRampRate(ConDriveTrain.RAMP_RATE);
+    m_rightMotorB.setOpenLoopRampRate(ConDriveTrain.RAMP_RATE);
+    m_leftMotorA.setOpenLoopRampRate(ConDriveTrain.RAMP_RATE);
+    m_leftMotorB.setOpenLoopRampRate(ConDriveTrain.RAMP_RATE);
+    
+    //  To swap front & back of robot, swap the INVERTED/NONINVERTED below and add or remove the minus sign 
+    //  in RobotContainer.cpp on the line which contains "ConXBOXControl::LEFT_JOYSTICK_X/4" for the turning axis
+    
+    // WARNING! TuffBox Mini requires BOTH motors spin in the same direction!!!
+    m_rightMotorA.setInverted(ConDriveTrain.NONINVERTED);
+    m_rightMotorB.setInverted(ConDriveTrain.NONINVERTED);
+    // WARNING! TuffBox Mini requires BOTH motors spin in the same direction!!!
+    m_leftMotorA.setInverted(ConDriveTrain.INVERTED);
+    m_leftMotorB.setInverted(ConDriveTrain.INVERTED);
+
+    // set PID coefficients
+    // left pid controller
+    left_pidController.setP(kP);
+    left_pidController.setI(kI);
+    left_pidController.setD(kD);
+    left_pidController.setIZone(kIz);
+    left_pidController.setFF(kFF);
+    left_pidController.setOutputRange(kMinOutput, kMaxOutput);
+
+    // right pid controller
+    right_pidController.setP(kP);
+    right_pidController.setI(kI);
+    right_pidController.setD(kD);
+    right_pidController.setIZone(kIz);
+    right_pidController.setFF(kFF);
+    right_pidController.setOutputRange(kMinOutput, kMaxOutput);
+
+    /**
+     * Smart Motion coefficients are set on a SparkMaxPIDController  object
+     * 
+     * - SetSmartMotionMaxVelocity() will limit the velocity in RPM of
+     * the pid controller in Smart Motion mode
+     * - SetSmartMotionMinOutputVelocity() will put a lower bound in
+     * RPM of the pid controller in Smart Motion mode
+     * - SetSmartMotionMaxAccel() will limit the acceleration in RPM^2
+     * of the pid controller in Smart Motion mode
+     * - SetSmartMotionAllowedClosedLoopError() will set the max allowed
+     * error for the pid controller in Smart Motion mode
+    */
+    // left pid controller
+    left_pidController.setSmartMotionMaxVelocity(kMaxVel, 0);
+    left_pidController.setSmartMotionMinOutputVelocity(kMinVel, 0);
+    left_pidController.setSmartMotionMaxAccel(kMaxAcc, 0);
+    left_pidController.setSmartMotionAllowedClosedLoopError(kAllErr, 0);
+
+    //right pid controller
+    right_pidController.setSmartMotionMaxVelocity(kMaxVel, 0);
+    right_pidController.setSmartMotionMinOutputVelocity(kMinVel, 0);
+    right_pidController.setSmartMotionMaxAccel(kMaxAcc, 0);
+    right_pidController.setSmartMotionAllowedClosedLoopError(kAllErr, 0);
+
+    // Set additional motor controllers on drive train to follow
+    m_rightMotorB.follow(m_rightMotorA, ConDriveTrain.NONINVERTED);
+    m_leftMotorB.follow(m_leftMotorA, ConDriveTrain.NONINVERTED);
+
+    // NavX gyro
+    gyro = new AHRS(SPI.Port.kMXP);
+
+    // We should always be writing the desired SparkMax settings if they're not the default
+    m_leftEncoderA.setPositionConversionFactor(ConSparkMax.POSITION_CONVERSION_FACTOR);
+    m_rightEncoderA.setPositionConversionFactor(ConSparkMax.POSITION_CONVERSION_FACTOR);
+    m_leftEncoderB.setPositionConversionFactor(ConSparkMax.POSITION_CONVERSION_FACTOR);
+    m_rightEncoderB.setPositionConversionFactor(ConSparkMax.POSITION_CONVERSION_FACTOR);
+    
+    /**
+       FIXME: This may be a better way to set the distance conversion: Right on the SparkMax!
+        Native Tick counts * Gear Ratio divided by Wheel circumference (42 * 10.71)/(6 * pi) = ticks per inch
+        We can use the SetPositionConversionFactor() to use this as our tick reference.
+        // m_leftEncoderA.SetPositionConversionFactor(ConDriveTrain::TICKS_PER_INCH);
+        // m_rightEncoderA.SetPositionConversionFactor(ConDriveTrain::TICKS_PER_INCH);
+        // m_leftEncoderB.SetPositionConversionFactor(ConDriveTrain::TICKS_PER_INCH);
+        // m_rightEncoderB.SetPositionConversionFactor(ConDriveTrain::TICKS_PER_INCH);
+      BUUUT: IF YOU DO THIS, CHANGE THE GetLeftDistanceInches() and GetRightDistanceInches() methods!!!
+      */
+    
+    //#endif // ENABLE_DRIVETRAIN
+
+    // Create and get reference to SB tab
+    m_sbt_DriveTrain = Shuffleboard.getTab(ConShuffleboard.DriveTrainTab);
+
+    // Create widgets for digital filter lengths
+    m_nte_DriveSpeedFilter = m_sbt_DriveTrain.addPersistent("Drive Speed Filter", 10.0)
+      .withSize(2, 1)
+      .withPosition(0, 0)
+      .getEntry();
+    m_nte_DriveRotationFilter = m_sbt_DriveTrain.addPersistent("Drive Rotation Filter", 5.0)
+      .withSize(2, 1)
+      .withPosition(0, 1)
+      .getEntry();
+
+    // Create widget for non-linear input
+    m_nte_InputExponent = m_sbt_DriveTrain.addPersistent("Input Exponent", 1.0)
+      .withSize(1, 1)
+      .withPosition(0, 2)
+      .getEntry();
+
+    // Create widgets for AutoDrive
+    m_nte_a_DriveDelay = m_sbt_DriveTrain.addPersistent("a Launch Delay", ConDriveTrain.AUTONOMOUS_DRIVE_DELAY)
+      .withSize(1, 1)
+      .withPosition(3, 0)
+      .getEntry();
+    m_nte_b_DriveDistance = m_sbt_DriveTrain.addPersistent("b Drive Distance", ConDriveTrain.AUTONOMOUS_DISTANCE)
+      .withSize(1, 1)
+      .withPosition(3, 1)
+      .getEntry();
+    m_nte_c_DriveTurnAngle = m_sbt_DriveTrain.addPersistent("c Turn Angle", 0.0)
+      .withSize(1, 1)
+      .withPosition(3, 2)
+      .getEntry();
+    m_nte_autoDriveMode = m_sbt_DriveTrain.addPersistent("AutoDrive Mode", ConDriveTrain.AUTONOMOUS_MODE_2_BALL)
+      .withSize(1, 1)
+      .withPosition(3, 3)
+      .getEntry();
+    //  m_nte_Testing     = m_sbt_DriveTrain->AddPersistent("Testing", 0.0)       .WithSize(1, 1).WithPosition(3, 3).GetEntry();
+
+    // Display current encoder values
+    m_nte_LeftEncoder = m_sbt_DriveTrain.addPersistent("Left Side Encoder", 0.0)
+      .withSize(2,1)
+      .withPosition(4,0)
+      .getEntry();
+    m_nte_RightEncoder = m_sbt_DriveTrain.addPersistent("Right Side Encoder", 0.0)
+      .withSize(2,1)
+      .withPosition(4,1)
+      .getEntry();
+    m_nte_IMU_ZAngle = m_sbt_DriveTrain.addPersistent("IMU Z-Axis Angle", 0.0)
+      .withSize(2,1)
+      .withPosition(4,2)
+      .getEntry();
+
+    // End of DriveTrain Constructor
+    System.out.println("DriveTrain() Constructor returning...");
+  }
+
+  // #ifdef ENABLE_DRIVETRAIN
+  // This method will be called once per scheduler run
+  public void periodic() {
+    m_nte_LeftEncoder.setDouble(getAverageLeftEncoders());
+    m_nte_RightEncoder.setDouble(getAverageRightEncoders());
+    m_nte_IMU_ZAngle.setDouble(getGyroAngle());
+  }
+
+  // Used by TeleOpDrive
+  public void arcadeDrive(double speed, double rotation) {
+    m_driveTrain.arcadeDrive(speed, OI.deadZone(rotation));
+  }
+
+  // Used by AlignToPlayerStationPID
+  public void tankDrive(double left, double right){
+    m_driveTrain.tankDrive(left, right);
+  }
+
+  // Used by TeleOpSlowDrive
+  public double getMaxOutput() {
+    return m_maxOutput;
+  }
+
+  public void setMaxOutput(double maxOutput) {
+    m_maxOutput = maxOutput;
+    // m_drivetain is the frc::DifferentialDrive class/object
+    m_driveTrain.setMaxOutput(maxOutput);
+  }
+
+  // Used by AutoDriveDistance
+  public void resetEncoders() {
+    m_rightEncoderA.setPosition(0.0);
+    m_rightEncoderB.setPosition(0.0);
+    m_leftEncoderA.setPosition(0.0);
+    m_leftEncoderB.setPosition(0.0);
+  }
+
+  // Account for two encoders per side
+  public double getRightDistanceInches() {
+    return (getAverageRightEncoders() * ConDriveTrain.INCHES_PER_TICK);
+  }
+
+  public double getLeftDistanceInches() {
+    return (getAverageLeftEncoders() * ConDriveTrain.INCHES_PER_TICK);
+  }
+
+  // Used by AutoDriveDistance
+  public double getAverageDistanceInches() {
+    // FIXME: Should't these be added, or is one negative? I think we just REVERSE the encoder. CRE 2022-01-25
+    return ((getLeftDistanceInches() + getRightDistanceInches()) / 2.0);
+  }
+
+  public double getAverageLeftEncoders() {
+    return (m_leftEncoderA.getPosition() + m_leftEncoderB.getPosition() ) / 2.0;
+  }
+
+  public double getAverageRightEncoders() {
+    return (m_rightEncoderA.getPosition() + m_rightEncoderB.getPosition() ) / 2.0;
+  }
+
+  public void goToAngle(double angle) {
+    angle = angle * ConDriveTrain.ANGLE_2_IN;
+    left_pidController.setReference(angle, CANSparkMax.ControlType.kSmartMotion);
+    right_pidController.setReference(angle, CANSparkMax.ControlType.kSmartMotion);
+  }
+
+  public double getGyroAngle() {
+    return gyro.getAngle();
+  }
+
+  // Used by AutoTurn 																	   
+  public void resetGyro() {
+    gyro.reset();
+  }
+  //#endif // ENABLE_DRIVETRAIN
+
+  // Call SetAutonomousParameters() inside the AutonomousInit() method to read values from Shuffleboard
+  public void setAutonomousParameters() {
+    double d;
+    d = m_nte_autoDriveMode.getDouble(ConDriveTrain.AUTONOMOUS_MODE_LAUNCH_DELAY_MOVE);
+    if (d != m_autoDriveMode) {
+      m_autoDriveMode = d;
+      System.out.println("m_autoDriveMode set to " + m_autoDriveMode);
+    }
+    d = m_nte_b_DriveDistance.getDouble(ConDriveTrain.AUTONOMOUS_DISTANCE);
+    if (d != m_autoDistance) {
+      m_autoDistance = d;
+      System.out.println("m_autoDistance set to " + m_autoDistance);
+    }
+    d = m_nte_a_DriveDelay.getDouble(ConDriveTrain.AUTONOMOUS_DRIVE_DELAY);
+    if (d != m_autoDriveDelay) {
+      m_autoDriveDelay = d;
+      System.out.println("m_autoDriveDelay set to " + m_autoDriveDelay);
+    }
+  }
+
+  public void burnFlash() {
+    System.out.println("BurnFlash for DriveTrain");
+    // #ifdef ENABLE_DRIVETRAIN
+    // Save all SparkMax firmware parameters to flash memory
+    m_leftMotorA.burnFlash();
+    m_leftMotorB.burnFlash();
+    m_rightMotorA.burnFlash();
+    m_rightMotorB.burnFlash();
+    //#endif // ENABLE_DRIVETRAIN
+  }
+
+  // void DriveTrain::SetSafety(bool safety) { SetSafetyEnabled(safety);}
 }
 
 /** Original H

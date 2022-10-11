@@ -14,6 +14,14 @@ package frc.robot;
  */
 public final class Constants {
    
+    public static class ConMath {
+        public static double PI = Math.PI; // 3.141592;
+        public static double METERS_2_INCH = .0254; // m/in
+        public static double MINUTES_2_SECONDS = 1/60.; // sec/min
+        public static double RAD_2_DEG = 180.0/PI;
+        public static double DEG_2_RAD = 1/RAD_2_DEG;
+    }
+
     public static class ConSparkMax {
         public static double POSITION_CONVERSION_FACTOR = 42.0;
     }
