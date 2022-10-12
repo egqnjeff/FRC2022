@@ -4,31 +4,47 @@
 
 package frc.robot.commands;
 
+import edu.wpi.first.wpilibj.Timer;
 import edu.wpi.first.wpilibj2.command.CommandBase;
+import frc.robot.subsystems.DriveTrain;
 
 public class AutoDelay extends CommandBase {
-  /** Creates a new AutoDelay. */
-  public AutoDelay() {
+
+  DriveTrain m_driveTrain;
+  double m_seconds;
+  // double m_seconds; // Don't know how to type convert the NTE GetDouble() -> second_t
+  Timer m_timer;  
+
+  
+  public AutoDelay(double seconds) {
     // Use addRequirements() here to declare subsystem dependencies.
+    m_timer = new Timer(); 
+    m_seconds = seconds;
   }
-
+  
   // Called when the command is initially scheduled.
-  @Override
-  public void initialize() {}
-
-  // Called every time the scheduler runs while the command is scheduled.
-  @Override
-  public void execute() {}
-
+  public void initialize() {
+    m_timer.reset();
+    m_timer.start();
+    // m_seconds = (units::time::second_t)m_driveTrain->m_nte_a_DriveDelay.GetDouble(0.0); // Seconds delay before driving
+  }   
+  
+  // Called repeatedly when this Command is scheduled to run
+  // void AutoDelay::Execute() {}
+  
   // Called once the command ends or is interrupted.
-  @Override
-  public void end(boolean interrupted) {}
-
-  // Returns true when the command should end.
-  @Override
-  public boolean isFinished() {
-    return false;
+  public void end(boolean interrupted) {
+    // #ifdef DEBUG
+    System.out.println("AutoDelay::End()");
+    // #endif
   }
+  
+  // Returns true when the command should end.
+  public boolean isFinished() {
+    // m_timer.Get() returns a units::time::second_t
+    return (double)m_timer.get() > m_seconds;
+  }
+  
 }
 
 /** Original H
