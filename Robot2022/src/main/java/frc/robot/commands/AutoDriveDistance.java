@@ -5,30 +5,60 @@
 package frc.robot.commands;
 
 import edu.wpi.first.wpilibj2.command.CommandBase;
+import frc.robot.subsystems.DriveTrain;
 
 public class AutoDriveDistance extends CommandBase {
+
+  private DriveTrain m_driveTrain;
+  private double m_distance_inches = 0.0; // CRE 2022-01-28 Read from shuffleboard
+  private double m_speedOut = 0.0;
+
   /** Creates a new AutoDriveDistance. */
-  public AutoDriveDistance() {
+  public AutoDriveDistance(DriveTrain drivetrain, double distance) {
+    m_driveTrain = drivetrain;
+    m_distance_inches = distance;
     // Use addRequirements() here to declare subsystem dependencies.
+    addRequirements(m_driveTrain);
   }
 
   // Called when the command is initially scheduled.
   @Override
-  public void initialize() {}
+  public void initialize() {
+    m_driveTrain.resetEncoders();
+  }
 
   // Called every time the scheduler runs while the command is scheduled.
   @Override
-  public void execute() {}
+  public void execute() {
+    double speedN = 11.0; // length of digital filter
+    double maxSpeed = 0.5;
+    double rotation = 0.0;
+  
+    double desiredSpeed = (m_distance_inches > m_driveTrain.getAverageDistanceInches()) ? maxSpeed : -maxSpeed;
+    double speed = (((speedN - 1.0) * m_speedOut) + desiredSpeed) / speedN;
+    m_driveTrain.arcadeDrive(speed, rotation);
+    m_speedOut = speed;
+  }
 
   // Called once the command ends or is interrupted.
   @Override
-  public void end(boolean interrupted) {}
+  public void end(boolean interrupted) {
+    m_driveTrain.arcadeDrive(0.0, 0.0);
+  }
 
   // Returns true when the command should end.
   @Override
   public boolean isFinished() {
-    return false;
-  }
+    double epsilon = 5.0;
+
+    double delta = epsilon / 2.0;
+    if(m_distance_inches < 0) {
+      delta = -delta;
+    }
+
+    return ((Math.abs(m_distance_inches + delta - m_driveTrain.getAverageDistanceInches())) < epsilon);
+    }
+
 }
 
 /** Original H
