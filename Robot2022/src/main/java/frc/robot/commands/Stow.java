@@ -5,16 +5,24 @@
 package frc.robot.commands;
 
 import edu.wpi.first.wpilibj2.command.CommandBase;
+import frc.robot.subsystems.Intake;
 
 public class Stow extends CommandBase {
+  private Intake m_intake;
+
   /** Creates a new Stow. */
-  public Stow() {
+  public Stow(Intake intake) {
+    m_intake = intake;
     // Use addRequirements() here to declare subsystem dependencies.
+    addRequirements(m_intake);
   }
 
   // Called when the command is initially scheduled.
   @Override
-  public void initialize() {}
+  public void initialize() {
+    System.out.println("Command Stow::Initialize()");
+    m_intake.stow();  
+  }
 
   // Called every time the scheduler runs while the command is scheduled.
   @Override
@@ -22,13 +30,16 @@ public class Stow extends CommandBase {
 
   // Called once the command ends or is interrupted.
   @Override
-  public void end(boolean interrupted) {}
+  public void end(boolean interrupted) {
+    System.out.println("Command Stow::End()");
+  }
 
   // Returns true when the command should end.
   @Override
   public boolean isFinished() {
-    return false;
+    return true;
   }
+
 }
 
 /** Original H
