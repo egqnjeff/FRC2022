@@ -5,16 +5,24 @@
 package frc.robot.commands;
 
 import edu.wpi.first.wpilibj2.command.CommandBase;
+import frc.robot.subsystems.Intake;
 
 public class Reject extends CommandBase {
+  private Intake m_intake;
+
   /** Creates a new Reject. */
-  public Reject() {
+  public Reject(Intake intake) {
+    m_intake = intake;
     // Use addRequirements() here to declare subsystem dependencies.
+    addRequirements(m_intake);
   }
 
   // Called when the command is initially scheduled.
   @Override
-  public void initialize() {}
+  public void initialize() {
+    System.out.println("Reject::Initialize()");
+    m_intake.reject();  
+  }
 
   // Called every time the scheduler runs while the command is scheduled.
   @Override
@@ -22,13 +30,17 @@ public class Reject extends CommandBase {
 
   // Called once the command ends or is interrupted.
   @Override
-  public void end(boolean interrupted) {}
+  public void end(boolean interrupted) {
+    m_intake.load();
+    System.out.println("Reject::End()");  
+  }
 
   // Returns true when the command should end.
   @Override
   public boolean isFinished() {
     return false;
   }
+
 }
 
 /** Original H
