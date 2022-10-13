@@ -5,16 +5,25 @@
 package frc.robot.commands;
 
 import edu.wpi.first.wpilibj2.command.CommandBase;
+import frc.robot.subsystems.Launcher;
 
 public class Launch extends CommandBase {
+
+  private Launcher m_launcher;
+  
   /** Creates a new Launch. */
-  public Launch() {
+  public Launch(Launcher launcher) {
+    m_launcher = launcher;
     // Use addRequirements() here to declare subsystem dependencies.
+    addRequirements(m_launcher);
   }
 
   // Called when the command is initially scheduled.
   @Override
-  public void initialize() {}
+  public void initialize() {
+    System.out.println("Command Launch::Initialize()");
+    m_launcher.launch();  
+  }
 
   // Called every time the scheduler runs while the command is scheduled.
   @Override
@@ -22,13 +31,17 @@ public class Launch extends CommandBase {
 
   // Called once the command ends or is interrupted.
   @Override
-  public void end(boolean interrupted) {}
+  public void end(boolean interrupted) {
+    System.out.println("Command Launch::End()");
+    m_launcher.retract();  
+  }
 
   // Returns true when the command should end.
   @Override
   public boolean isFinished() {
-    return false;
+    return true;
   }
+
 }
 
 /** Original H
