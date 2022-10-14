@@ -25,10 +25,10 @@ public class DriveTrain extends SubsystemBase {
     // Autonomous Constants
     public static double AUTONOMOUS_DISTANCE = 84;  // 84.75 inches Needed to exit the launchpad 
     public static double AUTONOMOUS_DRIVE_DELAY = 5.0; // Seconds to delay between launch & drive
-    public static int AUTONOMOUS_MODE_2_BALL = 1;
-    public static int AUTONOMOUS_MODE_LAUNCH_DELAY_MOVE = 2;
-    public static int AUTONOMOUS_MODE_JUST_MOVE = 3;
-    public static int AUTONOMOUS_MODE_5_BALL = 5;
+    public static final int AUTONOMOUS_MODE_2_BALL = 1;
+    public static final int AUTONOMOUS_MODE_LAUNCH_DELAY_MOVE = 2;
+    public static final int AUTONOMOUS_MODE_JUST_MOVE = 3;
+    public static final int AUTONOMOUS_MODE_5_BALL = 5;
 
     // Motors
     public static int RIGHT_MOTOR_A_ID = 2;
@@ -101,9 +101,9 @@ public class DriveTrain extends SubsystemBase {
   NetworkTableEntry m_nte_autoDriveMode;
     
   // Autonomous drive parameters
-  double m_autoDistance = ConDriveTrain.AUTONOMOUS_DISTANCE;
-  double m_autoDriveMode = ConDriveTrain.AUTONOMOUS_MODE_2_BALL;
-  double m_autoDriveDelay = ConDriveTrain.AUTONOMOUS_DRIVE_DELAY;
+  public double m_autoDistance = ConDriveTrain.AUTONOMOUS_DISTANCE;
+  public double m_autoDriveMode = ConDriveTrain.AUTONOMOUS_MODE_2_BALL;
+  public double m_autoDriveDelay = ConDriveTrain.AUTONOMOUS_DRIVE_DELAY;
 
   double m_maxOutput = 1.0;
 
