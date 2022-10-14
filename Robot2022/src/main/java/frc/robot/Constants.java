@@ -22,10 +22,37 @@ public final class Constants {
         public static double DEG_2_RAD = 1/RAD_2_DEG;
     }
 
+    public static class ConLimelight {
+        public static int VISION_MODE = 0;
+        public static int CAMERA_MODE = 1;
+    
+        public static int LED_PIPLINE_DEFAULT = 0;
+        public static int LED_OFF = 1;
+        public static int LED_BLINK = 2;
+        public static int LED_ON = 3;
+    
+        public static int SNAPSHOT_STOP = 0;
+        public static int SNAPSHOT_START = 1;
+    
+        public static double HORIZONTAL_TOLERANCE = 1.0;  //degrees
+        public static double TARGET_HEIGHT = 38.5; //in to center of target
+        public static double CAMERA_HEIGHT = 19.5; //in to center of camera
+        public static double MAX_HORIZONTAL_OFFSET = 29.8; //degrees
+    
+        // constexpr cv::Matx33d cameraMatrix = cv::Matx33d(
+        //                     772.53876202, 0., 479.132337442,
+        //                     0., 769.052151477, 359.143001808,
+        //                     0., 0., 1.0);
+        // constexpr std::vector istortionCoefficient =  std::vector<double> {
+        //                     2.9684613693070039e-01, -1.4380252254747885e+00,-2.2098421479494509e-03,
+        //                     -3.3894563533907176e-03, 2.5344430354806740e+00};
+    
+        public static double focalLength = 2.9272781257541; //mm
+    }
+    
     public static class ConSparkMax {
         public static double POSITION_CONVERSION_FACTOR = 42.0;
     }
- 
 }
 
 /** Original CPP
