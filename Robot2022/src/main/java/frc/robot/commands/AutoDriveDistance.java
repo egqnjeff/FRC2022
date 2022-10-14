@@ -51,13 +51,8 @@ public class AutoDriveDistance extends CommandBase {
   public boolean isFinished() {
     double epsilon = 5.0;
 
-    double delta = epsilon / 2.0;
-    if(m_distance_inches < 0) {
-      delta = -delta;
-    }
-
-    return ((Math.abs(m_distance_inches + delta - m_driveTrain.getAverageDistanceInches())) < epsilon);
-    }
+    return ((Math.abs(m_distance_inches + Math.copySign(epsilon / 2.0, m_distance_inches) - m_driveTrain.getAverageDistanceInches())) < epsilon);
+  }
 
 }
 
