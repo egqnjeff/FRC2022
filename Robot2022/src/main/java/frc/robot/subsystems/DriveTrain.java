@@ -83,16 +83,16 @@ public class DriveTrain extends SubsystemBase {
   }
 
   ShuffleboardTab m_sbt_DriveTrain;
-  NetworkTableEntry m_nte_DriveSpeedFilter;
-  NetworkTableEntry m_nte_DriveRotationFilter;
-  NetworkTableEntry m_nte_InputExponent;
+  public NetworkTableEntry m_nte_DriveSpeedFilter;
+  public NetworkTableEntry m_nte_DriveRotationFilter;
+  public NetworkTableEntry m_nte_InputExponent;
 
   // Encoder outputs
   NetworkTableEntry m_nte_LeftEncoder;
   NetworkTableEntry m_nte_RightEncoder;
   NetworkTableEntry m_nte_IMU_ZAngle;
 
-  NetworkTableEntry m_nte_Testing;
+  public NetworkTableEntry m_nte_Testing;
 
   // Autonomous Variables
   NetworkTableEntry m_nte_a_DriveDelay;
