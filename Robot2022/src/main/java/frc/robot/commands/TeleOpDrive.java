@@ -4,12 +4,25 @@
 
 package frc.robot.commands;
 
+import edu.wpi.first.wpilibj.XboxController;
 import edu.wpi.first.wpilibj2.command.CommandBase;
+import frc.robot.OI.ConXBOXControl;
+import frc.robot.subsystems.DriveTrain;
 
 public class TeleOpDrive extends CommandBase {
+
+  private DriveTrain m_driveTrain;
+  // Digital filter outputs
+  private double m_speedOut = 0.0;
+  private double m_rotationOut = 0.0;
+  private XboxController m_driver_control;
+
   /** Creates a new TeleOpDrive. */
-  public TeleOpDrive() {
+  public TeleOpDrive(DriveTrain drivetrain, XboxController driver_control) {
+    m_driveTrain = drivetrain;
+    m_driver_control = driver_control;
     // Use addRequirements() here to declare subsystem dependencies.
+    addRequirements(drivetrain);
   }
 
   // Called when the command is initially scheduled.
@@ -18,7 +31,42 @@ public class TeleOpDrive extends CommandBase {
 
   // Called every time the scheduler runs while the command is scheduled.
   @Override
-  public void execute() {}
+  public void execute() {
+    // Digital filter lengths- between 1.0 (no filter) and 20.0 (90% at 1 second) (11.0 is 90% at 0.5 sec)
+    // Idea from simple filter at https://www.chiefdelphi.com/t/moderating-acceleration-deceleration/77960/4
+
+    // Get adjustment values
+    double speedN = m_driveTrain.m_nte_DriveSpeedFilter.getDouble(10.0);
+    double rotationN = m_driveTrain.m_nte_DriveRotationFilter.getDouble(8.0);
+    if (speedN < 1.0) { speedN = 1.0; }
+    if (rotationN < 1.0) { rotationN = 1.0; }
+    double exponent = m_driveTrain.m_nte_InputExponent.getDouble(1.0);
+    if (exponent < 1.0) { exponent = 1.0; }
+    if (exponent > 3.0) { exponent = 3.0; }
+
+    // Adjust input speed with exponentiation
+    double speed = getSpeed(m_driver_control);
+    double adjustedSpeed = Math.copySign(Math.pow(Math.abs(speed), exponent), speed);
+
+    // Adjust input speed and input rotation with filters
+    speed = (((speedN - 1.0) * m_speedOut) + adjustedSpeed) / speedN;
+    double rotation = (((rotationN - 1.0) * m_rotationOut) + getRotation(m_driver_control)) / rotationN;
+
+    // Do it
+    m_driveTrain.arcadeDrive(speed, rotation);
+
+    // Display the distance we've driven
+    m_driveTrain.m_nte_Testing.setDouble(m_driveTrain.getLeftDistanceInches());
+
+    m_speedOut = speed;
+    m_rotationOut = rotation;
+
+    // Options for more accurate time:
+    //frc::RobotController::GetFPGATime()/1000
+    // For Linear Filters:
+    // From https://docs.wpilib.org/en/latest/docs/software/advanced-control/filters/linear-filter.html#creating-a-linearfilter
+    //frc::LinearFilter<double> filter = frc::LinearFilter<double>::SinglePoleIIR(0.1_s, 0.02_s);
+  }
 
   // Called once the command ends or is interrupted.
   @Override
@@ -28,6 +76,20 @@ public class TeleOpDrive extends CommandBase {
   @Override
   public boolean isFinished() {
     return false;
+  }
+
+  private static double getSpeed(XboxController driver_control) {
+    // #ifdef ENABLE_FLIGHTSTICK
+    // return driver_control.getRawAxis(ConFlightControl.ELEVATOR);
+    // #else // !ENABLE_FLIGHTSTICK
+    return driver_control.getRawAxis(ConXBOXControl.RIGHT_TRIGGER) - driver_control.getRawAxis(ConXBOXControl.LEFT_TRIGGER);
+  }
+
+  private static double getRotation(XboxController driver_control) {
+    // #ifdef ENABLE_FLIGHTSTICK
+    // return driver_control.getRawAxis(ConFlightControl.RUDDER);
+    // #else // !ENABLE_FLIGHTSTICK
+    return -driver_control.getRawAxis(ConXBOXControl.LEFT_JOYSTICK_X/4);
   }
 }
 
