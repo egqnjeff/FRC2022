@@ -4,11 +4,30 @@
 
 package frc.robot;
 
-import edu.wpi.first.wpilibj.GenericHID;
+import edu.wpi.first.cameraserver.CameraServer;
+import edu.wpi.first.cscore.UsbCamera;
+import edu.wpi.first.networktables.NetworkTableEntry;
+import edu.wpi.first.wpilibj.DriverStation;
 import edu.wpi.first.wpilibj.XboxController;
-import frc.robot.commands.ExampleCommand;
-import frc.robot.subsystems.ExampleSubsystem;
+import edu.wpi.first.wpilibj.shuffleboard.Shuffleboard;
+import edu.wpi.first.wpilibj.shuffleboard.ShuffleboardTab;
 import edu.wpi.first.wpilibj2.command.Command;
+import edu.wpi.first.wpilibj2.command.InstantCommand;
+import edu.wpi.first.wpilibj2.command.StartEndCommand;
+import edu.wpi.first.wpilibj2.command.button.JoystickButton;
+import frc.robot.OI.ConShuffleboard;
+import frc.robot.OI.ConXBOXControl;
+import frc.robot.commands.AutoDrive;
+import frc.robot.commands.Climb;
+import frc.robot.commands.ExtendClimber;
+import frc.robot.commands.TeleOpDrive;
+import frc.robot.subsystems.Climber;
+import frc.robot.subsystems.DriveTrain;
+import frc.robot.subsystems.Intake;
+import frc.robot.subsystems.LEDs;
+import frc.robot.subsystems.Launcher;
+import frc.robot.subsystems.Vision;
+import frc.robot.subsystems.LEDs.ConLED;
 
 /**
  * This class is where the bulk of the robot should be declared. Since Command-based is a
@@ -17,34 +36,200 @@ import edu.wpi.first.wpilibj2.command.Command;
  * subsystems, commands, and button mappings) should be declared here.
  */
 public class RobotContainer {
+
+  ShuffleboardTab m_sbt_Robot;
+  NetworkTableEntry m_nte_CodeVersion;
+
+  // The driver's game controller
+  XboxController driver_control = new XboxController(ConXBOXControl.DRIVER_CONTROLLER_PORT);
+  // The codriver's game controller
+  XboxController codriver_control = new XboxController(ConXBOXControl.CODRIVER_CONTROLLER_PORT);
+
   // The robot's subsystems and commands are defined here...
-  private final ExampleSubsystem m_exampleSubsystem = new ExampleSubsystem();
+  // Subsystems
+  private DriveTrain m_driveTrain;
+  private Launcher m_launcher;
+  private Intake m_intake;
+  private Climber m_climber;
+  private Vision m_vision;
+  private LEDs m_leds;
 
-  private final ExampleCommand m_autoCommand = new ExampleCommand(m_exampleSubsystem);
+  // Commands...
+  AutoDrive m_autoDrive = null;
 
-  /** The container for the robot. Contains subsystems, OI devices, and commands. */
   public RobotContainer() {
+    // ANOTHER WAY OF CONSTRUCTING: m_autoDrive = AutoDrive(&m_driveTrain);
+    // Initialize all of your commands and subsystems here
+  }
+
+  public void robotInit() {
+
     // Configure the button bindings
     configureButtonBindings();
+    DriverStation.silenceJoystickConnectionWarning(true);
+    m_driveTrain.setDefaultCommand(new TeleOpDrive(m_driveTrain, driver_control));
+
+    // Start the Camera Server
+    // Get the USB camera from CameraServer
+    UsbCamera camera = CameraServer.startAutomaticCapture();
+    // Set the resolution
+    camera.setResolution(640, 480);
+    camera.setFPS(15);
+
+    // Create and get reference to SB tab
+    m_sbt_Robot = Shuffleboard.getTab(ConShuffleboard.RobotTab);
+    // See https://docs.wpilib.org/en/latest/docs/software/wpilib-tools/shuffleboard/layouts-with-code/using-tabs.html
+  
+    // Create widget for code version
+    // #define CODE_VERSION ROBOT_VERSION_STRING " " __DATE__ " " __TIME__ 
+    String CODE_VERSION = "TEMP_JAVA_Conversion";
+    m_nte_CodeVersion = m_sbt_Robot.add("Code Version", CODE_VERSION)
+      .withSize(3, 1)
+      .withPosition(0, 0)
+      .getEntry();
+  }
+    
+  // Called ONCE when the robot is disabled
+  public void disabledInit() {
+    // #ifdef ENABLE_DRIVETRAIN
+    m_driveTrain.resetEncoders();
+    // #endif // ENABLE_DRIVETRAIN
+    // #ifdef ENABLE_VISION
+    //m_vision.InitVision(); // Causes camera stream to freeze
+    // #endif // ENABLE_VISION
+    m_launcher.setLaunchSoftLimits();
+    m_climber.setClimberSoftLimits();
+    m_intake.stow();
+    m_leds.init();
+    m_leds.setMode(ConLED.mode.DISABLED);
+  }
+  
+  // Called periodically while the robot is disabled
+  public void disabledPeriodic() {
+    m_driveTrain.setAutonomousParameters();
+    m_launcher.setLaunchSoftLimits();
   }
 
-  /**
-   * Use this method to define your button->command mappings. Buttons can be created by
-   * instantiating a {@link GenericHID} or one of its subclasses ({@link
-   * edu.wpi.first.wpilibj.Joystick} or {@link XboxController}), and then passing it to a {@link
-   * edu.wpi.first.wpilibj2.command.button.JoystickButton}.
-   */
-  private void configureButtonBindings() {}
+  public void teleopInit() {
+    m_launcher.setLaunchSoftLimits();
+    m_launcher.setupClose();
+    m_climber.setClimberSoftLimits();
+    m_launcher.retract();
+    // Set Limelight Camera options
+    m_vision.initVision(); // Causes camera stream to freeze
+    m_leds.setMode(ConLED.mode.TELEOP);
+  }
+    
+  public void teleopPeriodic() {
+    m_launcher.setLaunchSoftLimits();
+  }
 
-  /**
-   * Use this to pass the autonomous command to the main {@link Robot} class.
-   *
-   * @return the command to run in autonomous
-   */
+  public void autonomousInit() {
+    m_driveTrain.setAutonomousParameters();
+    m_launcher.setLaunchSoftLimits();
+    m_launcher.setupClose();
+    m_climber.setClimberSoftLimits();
+    // #ifdef ENABLE_DRIVETRAIN
+    m_driveTrain.resetGyro();
+    // #endif // ENABLE_DRIVETRAIN
+    
+    if (DriverStation.isFMSAttached()) {
+      m_driveTrain.burnFlash();
+      m_launcher.burnFlash();
+      m_intake.burnFlash();
+      m_climber.burnFlash();
+    }
+    m_leds.setMode(ConLED.mode.AUTONOMOUS);
+  }
+  
+  public void configureButtonBindings() {
+    // Configure your button bindings here
+    // #ifdef ENABLE_DRIVETRAIN
+      // Commence reduced speed driving when bumper(s) pressed
+      // new JoystickButton(driver_control, ConXBOXControl.RIGHT_BUMPER)
+      //   .whileHeld(new TeleOpDrive(m_driveTrain, driver_control));
+      // new JoystickButton(driver_control, ConXBOXControl.LEFT_BUMPER)
+      //   .whileHeld(new TeleOpDrive(m_driveTrain, driver_control));
+    // #endif // ENABLE_DRIVETRAIN
+
+    // #ifdef ENABLE_LAUNCHER
+      // Duplicate Launch OI controls on both driver & codriver inputs
+      new JoystickButton(driver_control, ConXBOXControl.LEFT_BUMPER)
+        .whileHeld(new StartEndCommand(() -> m_launcher.launchBert(1.0), () -> m_launcher.retractBert(), m_launcher));
+      new JoystickButton(driver_control, ConXBOXControl.RIGHT_BUMPER)
+        .whileHeld(new StartEndCommand(() -> m_launcher.launchErnie(1.0), () -> m_launcher.retractErnie(), m_launcher));
+
+      new JoystickButton(codriver_control, ConXBOXControl.LEFT_BUMPER)
+        .whileHeld(new StartEndCommand(() -> m_launcher.launchBert(1.0), () -> m_launcher.retractBert(), m_launcher));
+      new JoystickButton(codriver_control, ConXBOXControl.RIGHT_BUMPER)
+        .whileHeld(new StartEndCommand(() -> m_launcher.launchErnie(1.0), () -> m_launcher.retractErnie(), m_launcher));
+
+      new JoystickButton(codriver_control, ConXBOXControl.A)
+        .whileHeld(new StartEndCommand(() -> m_launcher.launch(), () -> m_launcher.retract(), m_launcher));
+
+    // turn these off so as not to conflict with led demo
+      // new JoystickButton(driver_control, ConXBOXControl.SELECT)
+      //   .whenPressed(new InstantCommand(() -> m_launcher.setupFar(), m_launcher));
+      // new JoystickButton(driver_control, ConXBOXControl.START)
+      //   .whenPressed(new InstantCommand(() -> m_launcher.setupClose(), m_launcher));
+
+    // #ifdef ENABLE_LED_DEMO
+      new JoystickButton(driver_control, ConXBOXControl.SELECT)
+        .whenPressed(new InstantCommand(() -> m_leds.on(), m_leds));
+      new JoystickButton(driver_control, ConXBOXControl.START)
+        .whenPressed(new InstantCommand(() -> m_leds.off(), m_leds));
+    // #endif // ENABLE_LED_DEMO
+
+    // #ifdef ENABLE_INTAKE
+      // Duplicate Intake OI controls on both driver & codriver inputs
+      new JoystickButton(driver_control, ConXBOXControl.A)
+        .toggleWhenPressed(new StartEndCommand(() -> m_intake.deploy(), () -> m_intake.stow(), m_intake));
+      new JoystickButton(driver_control, ConXBOXControl.B)
+        .whileHeld(new StartEndCommand(() -> m_intake.reject(), () -> m_intake.load(), m_intake));
+      // Disableing intake control for co driver
+      // new JoystickButton(codriver_control, ConXBOXControl.A)
+      //   .toggleWhenPressed(new StartEndCommand(() -> m_intake.deploy(), () -> m_intake.stow(), m_intake));
+      // new JoystickButton(codriver_control, ConXBOXControl.B)
+      //   .whileHeld(new StartEndCommand(() -> m_intake.reject(), () -> m_intake.load(), m_intake));
+    // #endif
+
+    // #ifdef ENABLE_CLIMBER
+      new JoystickButton(codriver_control, ConXBOXControl.X)
+        .whileHeld(new Climb(m_climber));
+      new JoystickButton(codriver_control, ConXBOXControl.Y)
+        .whileHeld(new ExtendClimber(m_climber));
+    // #endif // ENABLE_CLIMBER
+
+    // #ifdef ENABLE_TESTING
+      // Servo Test
+      // new JoystickButton(driver_control, ConXBOXControl.X)
+      //   .whenPressed(new Test(m_testing, 1));
+      // new JoystickButton(driver_control, ConXBOXControl.Y)
+      //   .whenPressed(new Test(m_testing, 0));
+    // #endif
+
+    // #ifdef ENABLE_TESTING
+      // new JoystickButton(driver_control, ConXBOXControl.SELECT)
+      //   .whenPressed(new InstantCommand(() -> m_vision.toggleLight(), m_vision));
+      // new JoystickButton(driver_control, ConXBOXControl.X)
+      //   .toggleWhenPressed(new StartEndCommand(() -> m_vision.lightBlink(), () -> m_vision.lightOff(), m_vision));
+
+      // // PiP Not working: Freezes stream
+      // new JoystickButton(driver_control, ConXBOXControl.Y)
+      //   .whenPressed(new InstantCommand(() -> m_vision.piPStream(), m_vision));
+    // #endif
+  }
+
   public Command getAutonomousCommand() {
-    // An ExampleCommand will run in autonomous
-    return m_autoCommand;
+    // An example command will be run in autonomous
+    if (m_autoDrive != null) {
+      m_autoDrive.cancel();
+      m_autoDrive = null;
+    }  
+    m_autoDrive = new AutoDrive(m_driveTrain, m_launcher, m_intake);
+    return m_autoDrive;
   }
+
 }
 
 /** Original H
