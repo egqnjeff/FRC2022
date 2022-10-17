@@ -108,6 +108,7 @@ public class Launcher extends SubsystemBase {
     double m_BertFarLimit;  
   
   public Launcher() {
+    
     // Initialize stuff here
     // #ifdef ENABLE_LAUNCHER
     // #ifdef LAUNCHER_VELOCITY_CONTROL
@@ -260,7 +261,7 @@ public class Launcher extends SubsystemBase {
     // Ensure the launcher is in the retracted position
     retract();
   }
-
+ 
   public void launch() {
     launchBert(ConLauncher.DOUBLE_LAUNCH_PWR_SCALE_FACTOR);
     launchErnie(ConLauncher.DOUBLE_LAUNCH_PWR_SCALE_FACTOR);
@@ -319,6 +320,106 @@ public class Launcher extends SubsystemBase {
     m_launcherMotorErnie.set(-.1);
     // #endif
   }
+
+  public void setupFar(){
+    System.out.println("Launcher::SetupFar()");
+    m_useClose = false;
+    // #ifdef ENABLE_LAUNCHER
+    m_launcherMotorErnie.setSoftLimit(CANSparkMax.SoftLimitDirection.kForward, (float) m_ErnieFarLimit);
+    m_launcherMotorBert.setSoftLimit(CANSparkMax.SoftLimitDirection.kForward, (float) m_BertFarLimit);
+    // #endif // ENABLE_LAUNCHER
+  }
+  
+  public void setupClose() {
+    System.out.println("Launcher::SetupClose()");
+    m_useClose = true;
+    // #ifdef ENABLE_LAUNCHER
+    m_launcherMotorErnie.setSoftLimit(CANSparkMax.SoftLimitDirection.kForward, (float) m_ErnieFwdLimit);
+    m_launcherMotorBert.setSoftLimit(CANSparkMax.SoftLimitDirection.kForward, (float) m_BertFwdLimit);
+    // #endif // ENABLE_LAUNCHER
+  }
+
+  public void setLaunchSoftLimits() {
+    double d;
+
+    // Close Power
+    d = m_nte_Ernie_Power.getDouble(ConLauncher.ERNIE_POWER);
+    if (d != m_ErnieFwdPower) {
+      m_ErnieFwdPower = d;
+      System.out.println("m_ErnieFwdPower set to " + m_ErnieFwdPower);
+    }
+    d = m_nte_Bert_Power.getDouble(ConLauncher.BERT_POWER);
+    if (d != m_BertFwdPower) {
+      m_BertFwdPower = d;
+      System.out.println("m_BertFwdPower set to " + m_BertFwdPower);
+    }
+
+    // Close Limits
+    d = m_nte_Ernie_FwdLimit.getDouble(ConLauncher.ERNIE_FWD_LIMIT);
+    if (d != m_ErnieFwdLimit) {
+      m_ErnieFwdLimit = d;
+      System.out.println("m_ErnieFwdLimit set to " + m_ErnieFwdLimit);
+    }
+    d = m_nte_Bert_FwdLimit.getDouble(ConLauncher.BERT_FWD_LIMIT);
+    if (d != m_BertFwdLimit) {
+      m_BertFwdLimit = d;
+      System.out.println("m_BertFwdLimit set to " + m_BertFwdLimit);
+    }
+
+    // Far Power
+    d = m_nte_Ernie_FarPower.getDouble(ConLauncher.ERNIE_FAR_POWER);
+    if (d != m_ErnieFarPower) {
+      m_ErnieFarPower = d;
+      System.out.println("m_ErnieFarPower set to " + m_ErnieFarPower);
+    }
+    d = m_nte_Bert_FarPower.getDouble(ConLauncher.BERT_FAR_POWER);
+    if (d != m_BertFarPower) {
+      m_BertFarPower = d;
+      System.out.println("m_BertFarPower set to " + m_BertFarPower);
+    }
+
+    // Far Limits
+    d = m_nte_Ernie_FarLimit.getDouble(ConLauncher.ERNIE_FAR_LIMIT);
+    if (d != m_ErnieFarLimit) {
+      m_ErnieFarLimit = d;
+      System.out.println("m_ErnieFarLimit set to " + m_ErnieFarLimit);
+    }
+    d = m_nte_Bert_FarLimit.getDouble(ConLauncher.BERT_FAR_LIMIT);
+    if (d != m_BertFarLimit) {
+      m_BertFarLimit = d;
+      System.out.println("m_BertFarLimit set to " + m_BertFarLimit);
+    }
+  }
+
+  public void setResetSoftLimits() {
+  }
+  
+  public void stop() {
+    // #ifdef ENABLE_LAUNCHER
+    m_launcherMotorErnie.set(0.0);
+    m_launcherMotorBert.set(0.0);
+    // #endif
+  }
+  
+  public void periodic() {
+    // #ifdef ENABLE_LAUNCHER
+    // Display
+    m_nte_Bert_Position.setDouble(m_launcherEncoderBert.getPosition());
+    m_nte_Ernie_Position.setDouble(m_launcherEncoderErnie.getPosition());
+    m_nte_Bert_Voltage.setDouble(m_launcherMotorErnie.getBusVoltage());
+    m_nte_Ernie_Voltage.setDouble(m_launcherMotorErnie.getBusVoltage());
+    // #endif
+  }
+  
+  public void burnFlash() {
+    System.out.println("BurnFlash for Launchers");
+    // #ifdef ENABLE_LAUNCHER
+    // Save the configuration to flash memory
+    m_launcherMotorErnie.burnFlash();
+    m_launcherMotorBert.burnFlash();
+    // #endif // ENABLE_LAUNCHER
+  }
+  
 }
 
 /** Original H
